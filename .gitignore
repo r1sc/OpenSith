@@ -1,0 +1,9 @@
+.vs/
+Library/
+obj/
+*.csproj
+*.suo
+*.sln
+
+jkedit/
+Extracted/
