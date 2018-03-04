@@ -25,5 +25,8 @@ namespace jksharp.jklviewer.JKL
         public WorldSurface[] WorldSurfaces { get; set; }
         public Sector[] Sectors { get; set; }
         public int ActualNumberOfMaterials { get; set; }
+        public List<string> Models { get; set; }
+        public Dictionary<string, JKLTemplate> Templates { get; set; }
+        public List<JKLThing> Things { get; set; }
     }
 }

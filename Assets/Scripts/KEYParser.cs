@@ -30,7 +30,7 @@ class KEYParser
         Name = Path.GetFileNameWithoutExtension(path);
 
         string section = "";
-        int numFrames;
+        int numFrames = 0;
         float fps = 1.0f;
         int currentNodeIdx = 0;
         string currentMeshName = null;
@@ -81,7 +81,6 @@ class KEYParser
                             animationClip.SetCurve(transformPath, typeof(Transform), "localRotation.y", curveYR);
                             animationClip.SetCurve(transformPath, typeof(Transform), "localRotation.z", curveZR);
                             animationClip.SetCurve(transformPath, typeof(Transform), "localRotation.w", curveWR);
-                            
                         }
 
                         currentNodeIdx = int.Parse(_args[1]);
@@ -118,19 +117,38 @@ class KEYParser
                         var yaw = float.Parse(_args[7]);
                         var roll = float.Parse(_args[8]);
 
-                        curveX.AddKey(frame / fps, x);
-                        curveY.AddKey(frame / fps, y);
-                        curveZ.AddKey(frame / fps, z);
 
-                        var quat = Quaternion.Euler(pitch, roll, yaw);
+                        curveX.AddKey(frame / fps, -x);
+                        curveY.AddKey(frame / fps, z);
+                        curveZ.AddKey(frame / fps, -y);
+
+                        if (curveX.length == 1)
+                        {
+                            curveX.AddKey(numFrames / fps, -x);
+                            curveY.AddKey(numFrames / fps, z);
+                            curveZ.AddKey(numFrames / fps, -y);
+                        }
+
+                        var quat = Quaternion.Euler(pitch, -yaw, roll);
+                                   
                         curveXR.AddKey(frame / fps, quat.x);
                         curveYR.AddKey(frame / fps, quat.y);
                         curveZR.AddKey(frame / fps, quat.z);
                         curveWR.AddKey(frame / fps, quat.w);
 
-                        ReadLine(); // Skip delta timings
-                    }
+                        if (curveXR.length == 1)
+                        {
+                            curveXR.AddKey(numFrames / fps, quat.x);
+                            curveYR.AddKey(numFrames / fps, quat.y);
+                            curveZR.AddKey(numFrames / fps, quat.z);
+                            curveWR.AddKey(numFrames / fps, quat.w);
+                        }
 
+
+                        ReadLine();
+
+                        // Skip delta frames
+                    }
                 }
             }
         }

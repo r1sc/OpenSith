@@ -215,9 +215,9 @@ namespace Assets.Scripts
                                     Child = child,
                                     Sibling = sibling,
                                     NumChildren = numChildren,
-                                    Translation = new Vector3(x, y, z),
-                                    Rotation = new Vector3(pitch, yaw, roll),
-                                    Pivot = new Vector3(pivotx, pivoty, pivotz),
+                                    Translation = new Vector3(-x, z, -y),
+                                    Rotation = new Vector3(-pitch, roll, -yaw),
+                                    Pivot = new Vector3(-pivotx, pivotz, -pivoty),
                                     NodeName = hnodename
                                 };
                             }

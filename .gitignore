@@ -1,6 +1,7 @@
 .vs/
 Library/
 obj/
+Temp/
 *.csproj
 *.suo
 *.sln

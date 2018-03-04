@@ -14,7 +14,7 @@
 		#pragma surface surf Standard fullforwardshadows
 
 		// Use shader model 3.0 target, to get nicer looking lighting
-		#pragma target 3.0
+		#pragma target 3.5
 
 		sampler2D _MainTex;
 
@@ -34,9 +34,14 @@
 			// put more per-instance properties here
 		UNITY_INSTANCING_BUFFER_END(Props)
 
+		float2 mmod(float2 x, float2 m) {
+			return fmod(fmod(x, m) + m, m);
+		}
+
 		void surf (Input i, inout SurfaceOutputStandard o) {
-			// Albedo comes from a texture tinted by color
-			fixed4 c = tex2D(_MainTex, fmod(i.uv_MainTex * i.color.zw, i.color.zw) + i.color.xy);
+			// xy = pos in atlas
+			// zw = width / height in atlas
+			fixed4 c = tex2D(_MainTex, mmod(i.uv_MainTex * i.color.zw, i.color.zw) + i.color.xy);
 			o.Albedo = c.rgb;
 			// Metallic and smoothness come from slider variables
 			o.Metallic = _Metallic;

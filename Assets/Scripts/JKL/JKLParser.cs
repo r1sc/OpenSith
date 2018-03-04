@@ -41,14 +41,21 @@ namespace jksharp.jklviewer.JKL
             do
             {
                 _line = _streamReader.ReadLine();
-            } while (_line.StartsWith("#") || _line.Trim().Length == 0);
+            } while (_line != null && (_line.StartsWith("#") || _line.Trim().Length == 0));
+            if (_line == null)
+                return;
+
+            _args = new List<string>(_line.Trim().Split(new[] {' ', '\t'}, StringSplitOptions.RemoveEmptyEntries));
         }
 
         public JKLParser(JKL jkl, Stream jklStream)
         {
             _jkl = jkl;
             _streamReader = new StreamReader(jklStream);
+        }
 
+        public void Parse()
+        {
             ReadLine();
             while (!_streamReader.EndOfStream)
             {
@@ -75,13 +82,100 @@ namespace jksharp.jklviewer.JKL
                         break;
                     case "SECTION: SECTORS":
                         ParseSectors();
-                        _streamReader.Dispose();
-                        return;
+                        //_streamReader.Dispose();
+                        //return;
+                        break;
+                    case "SECTION: MODELS":
+                        ParseModels();
+                        break;
+                    case "SECTION: TEMPLATES":
+                        ParseTemplates();
+                        break;
+                    case "SECTION: THINGS":
+                        ParseThings();
+                        break;
                     default:
-                        throw new ArgumentException();
+                        ReadLine();
+                        break;
                 }
             }
+        }
 
+        private void ParseThings()
+        {
+            ReadLine();
+            if (Match("World things"))
+            {
+                _jkl.Things = new List<JKLThing>();
+                while (true)
+                {
+                    ReadLine();
+                    if (_line == "end")
+                    {
+                        break;
+                    }
+
+                    var thing = new JKLThing();
+                    thing.Template = _jkl.Templates[_args[1]];
+                    thing.Name = _args[2];
+                    thing.X = float.Parse(_args[3]);
+                    thing.Y = float.Parse(_args[4]);
+                    thing.Z = float.Parse(_args[5]);
+                    thing.Pitch = float.Parse(_args[6]);
+                    thing.Yaw = float.Parse(_args[7]);
+                    thing.Roll = float.Parse(_args[8]);
+                    thing.SectorIdx = int.Parse(_args[9]);
+                    
+                    _jkl.Things.Add(thing);
+                }
+            }
+        }
+
+        private void ParseTemplates()
+        {
+            ReadLine();
+            if (Match("World templates"))
+            {
+                _jkl.Templates = new Dictionary<string, JKLTemplate>();
+                while (true)
+                {
+                    ReadLine();
+                    if (_line == "end")
+                    {
+                        break;
+                    }
+                    
+                    var name = _args[0];
+                    var basedOn = _args[1];
+                    var numParams = _args.Count - 2;
+                    var template = JKLTemplate.CreateNewBasedOn(basedOn == "none" ? null : _jkl.Templates[basedOn]);
+                    for (int i = 0; i < numParams; i++)
+                    {
+                        var argVal = _args[2 + i].Split('=');
+                        template.Parameters[argVal[0]] = argVal[1];
+                    }
+                    _jkl.Templates.Add(name, template);
+                }
+            }
+        }
+
+        private void ParseModels()
+        {
+            ReadLine();
+            if (Match("World models"))
+            {
+                _jkl.Models = new List<string>();
+                
+                while (true)
+                {
+                    ReadLine();
+                    if (_line == "end")
+                    {
+                        break;
+                    }
+                    _jkl.Models.Add(_args[1]);
+                }
+            }
         }
 
         private void ParseSectors()
@@ -372,6 +466,38 @@ namespace jksharp.jklviewer.JKL
                     _jkl.GouraudDistance = float.Parse(_args[0]);
                 }
             }
+        }
+    }
+
+    internal class JKLThing
+    {
+        public JKLTemplate Template { get; set; }
+        public string Name { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Z { get; set; }
+        public float Pitch { get; set; }
+        public float Yaw { get; set; }
+        public float Roll { get; set; }
+        public int SectorIdx { get; set; }
+    }
+
+    internal class JKLTemplate
+    {
+        public Dictionary<string, string> Parameters { get; private set; }
+
+        private JKLTemplate()
+        {
+            Parameters = new Dictionary<string, string>();
+        }
+
+        public static JKLTemplate CreateNewBasedOn(JKLTemplate baseTemplate)
+        {
+            var template = new JKLTemplate();
+            if (baseTemplate != null)
+                template.Parameters = new Dictionary<string, string>(baseTemplate.Parameters);
+
+            return template;
         }
     }
 

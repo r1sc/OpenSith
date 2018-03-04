@@ -12,37 +12,45 @@ public class Sith : MonoBehaviour
     public Texture2D Atlas;
     public Material StandardMaterial;
 
-    public string _3DOToLoad;
+    // ReSharper disable once InconsistentNaming
+	public string JKLToLoad;
+    // ReSharper disable once InconsistentNaming
     public string AnimKEYToLoad;
 
-    struct TexInfo
+    private class TexInfo
     {
         public Rect[] Rects;
         public Vector2[] Sizes;
     }
 
     private CMP _cmp;
-    private Dictionary<string, TexInfo> _materialLookup = new Dictionary<string, TexInfo>();
+    private readonly Dictionary<string, TexInfo> _materialLookup = new Dictionary<string, TexInfo>();
+    private Dictionary<string, GameObject> _3DOCache = new Dictionary<string, GameObject>();
 
-    private void LoadTextures(string[] matFilenames)
+    private void LoadTextures(IEnumerable<string> matFilenames)
     {
         var textures = new Dictionary<string, Texture2D[]>();
 
         foreach (var matFilename in matFilenames)
         {
+            if (textures.ContainsKey(matFilename.ToLower()))
+            {
+                Debug.LogWarning("Texture " + matFilename + " defined twice.");
+                continue;
+            }
             var mat = new MAT();
             var matPath = @"Extracted\3do\mat\" + matFilename;
             if (!File.Exists(matPath))
                 matPath = @"Extracted\mat\" + matFilename;
 
             mat.ParseMat(_cmp, matPath);
-            textures.Add(matFilename, new[] { mat.Textures[0] });
+            textures.Add(matFilename.ToLower(), new[] { mat.Textures[0] });
         }
 
         var rects = Atlas.PackTextures(textures.Values.SelectMany(x => x).ToArray(), 0);
 
         var rectsOffset = 0;
-        foreach (var matFilename in matFilenames)
+        foreach (var matFilename in textures.Keys)
         {
             var numTextures = textures[matFilename].Length;
             var subrects = new Rect[numTextures];
@@ -68,84 +76,55 @@ public class Sith : MonoBehaviour
     // Use this for initialization
     void Start()
     {
-        var jkl = new JKL();
-        var jklParser = new JKLParser(jkl, new FileStream(@"Extracted\Episode\JK1.GOB\jkl\01narshadda.jkl", FileMode.Open));
-
         _cmp = new CMP();
-        _cmp.ParseCMP(@"Extracted\misc\cmp\" + jkl.WorldColorMaps[0]);
-
-
         Atlas = new Texture2D(256, 256, TextureFormat.ARGB32, true);
-        //Atlas.alphaIsTransparency = true;
-
-        LoadTextures(jkl.Materials.Take(jkl.ActualNumberOfMaterials).Select(m => m.Name).ToArray());
         StandardMaterial.mainTexture = Atlas;
+        //Atlas.alphaIsTransparency = true;
+        
+        if (!string.IsNullOrEmpty(JKLToLoad))
+        {
+            var jkl = new JKL();
+            var jklParser = new JKLParser(jkl,
+                new FileStream(@"Extracted\jkl\" + JKLToLoad, FileMode.Open));
+            jklParser.Parse();
 
-        //var materials = new List<Material>();
-        //var textures = new List<Texture2D>();
-        //for (int i = 0; i < jkl.Materials.Length; i++)
+            _cmp.ParseCMP(@"Extracted\misc\cmp\" + jkl.WorldColorMaps[0]);
+            LoadTextures(jkl.Materials.Take(jkl.ActualNumberOfMaterials).Select(m => m.Name).ToArray());
+            BuildMapSectors(jkl);
+
+            foreach (var thing in jkl.Things)
+            {
+                if (thing.Template.Parameters.ContainsKey("model3d"))
+                {
+                    var modelFilename = thing.Template.Parameters["model3d"];
+                    GameObject thingGameObject;
+                    if (_3DOCache.ContainsKey(modelFilename))
+                        thingGameObject = Instantiate(_3DOCache[modelFilename]);
+                    else
+                        thingGameObject = Load3DO(modelFilename);
+                    
+                    thingGameObject.transform.position = new Vector3(thing.X * 10, thing.Z * 10, thing.Y * 10);
+                    thingGameObject.transform.rotation = Quaternion.AngleAxis(thing.Yaw, Vector3.up);//Quaternion.Euler(thing.Pitch, thing.Yaw, thing.Roll);
+                }
+            }
+        }
+        
+
+        //if (!string.IsNullOrEmpty(_3DOToLoad))
         //{
-        //    if (jkl.Materials[i] == null)
-        //        continue;
-        //    var matName = jkl.Materials[i].Name;
-        //    if (matName == "DFLT.MAT")
+        //    var threedoGameObject = Load3DO(_3DOToLoad);
+        //    if (!string.IsNullOrEmpty(AnimKEYToLoad))
         //    {
-        //        materials.Add(StandardMaterial);
+        //        var keyParser = new KEYParser();
+        //        var animClip = keyParser.Parse(threedo, threedoGameObject.transform,
+        //            @"Extracted\3do\key\" + AnimKEYToLoad);
+        //        var anim = (Animation) threedoGameObject.AddComponent(typeof(Animation));
+
+        //        animClip.wrapMode = WrapMode.Loop;
+        //        anim.clip = animClip;
+        //        anim.AddClip(animClip, keyParser.Name);
+        //        anim.Play();
         //    }
-        //    else
-        //    {
-        //        var material = Instantiate(StandardMaterial);
-        //        var mat = new MAT();
-        //        var matPath = @"Extracted\3do\mat\" + matName;
-        //        if (!File.Exists(matPath))
-        //            matPath = @"Extracted\mat\" + matName;
-        //        mat.ParseMat(cmp, matPath);
-        //        textures.Add(mat.Textures.First());
-        //        material.mainTexture = mat.Textures[0];
-
-        //        materials.Add(material);
-        //    }
-        //}
-        //Textures = textures.ToArray();
-        //Materials = materials.ToArray();
-
-
-        BuildMapSectors(jkl);
-
-        //Atlas = new Texture2D(2048, 2048);
-        //Atlas.filterMode = FilterMode.Point;
-        //var textureRects = Atlas.PackTextures(textures.ToArray(), 0);
-
-        //var matRects = new List<MatTextureRect>();
-        //for (int i = 0; i < textureRects.Length; i++)
-        //{
-        //    matRects.Add(new MatTextureRect
-        //    {
-        //        Texture2D = textures[i],
-        //        Rect = textureRects[i],
-        //    });
-        //}
-        //Material = Instantiate(StandardMaterial);
-        //Material.mainTexture = Atlas;
-
-        // var go1 = Load3DO(cmp, @"Extracted\3do\seqp.3do");
-        // var go2 = Load3DO(cmp, @"Extracted\3do\r2.3do");
-        // go2.transform.position += Vector3.right * 2;
-        //var threedo = new _3DO();
-        //threedo.Load3DO(@"Extracted\3do\" + _3DOToLoad);
-        //var st = Load3DO(cmp, threedo);
-
-
-        //if (AnimKEYToLoad != "")
-        //{
-        //    var keyParser = new KEYParser();
-        //    var animClip = keyParser.Parse(threedo, st.transform, @"Extracted\3do\key\" + AnimKEYToLoad);
-        //    var anim = (Animation)st.AddComponent(typeof(Animation));
-
-        //    animClip.wrapMode = WrapMode.Loop;
-        //    anim.clip = animClip;
-        //    anim.AddClip(animClip, keyParser.Name);
-        //    anim.Play();
         //}
     }
 
@@ -172,26 +151,24 @@ public class Sith : MonoBehaviour
             for (int i = 0; i < sector.SurfaceCount; i++)
             {
                 var surfaceIdx = sector.SurfaceStartIdx + i;
-                //if (surfaceIdx != 79)
-                //    continue;
 
                 var surface = jkl.WorldSurfaces[surfaceIdx];
                 if (surface.Adjoin != null)
                     continue;
                 
                 var viStart = vertices.Count;
-                for (int j = 0; j < surface.SurfaceVertexGroups.Length; j++)
+                foreach (SurfaceVertexGroup t in surface.SurfaceVertexGroups)
                 {
-                    var vertIndex = surface.SurfaceVertexGroups[j].VertexIdx;
+                    var vertIndex = t.VertexIdx;
                     var vert = new Vector3(jkl.WorldVertices[vertIndex].x, jkl.WorldVertices[vertIndex].z,
                         jkl.WorldVertices[vertIndex].y);
                     vertices.Add(vert);
                     normals.Add(new Vector3(surface.SurfaceNormal.x, surface.SurfaceNormal.z, surface.SurfaceNormal.y));
 
-                    var uv = surface.SurfaceVertexGroups[j].TextureVertex;
+                    var uv = t.TextureVertex;
                     if (uv.HasValue)
                     {
-                        var material = _materialLookup[surface.Material.Name];
+                        var material = _materialLookup[surface.Material.Name.ToLower()];
 
                         var uv2 = uv.Value;
                         colors.Add(new Color(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
@@ -219,34 +196,33 @@ public class Sith : MonoBehaviour
             mesh.colors = colors.ToArray();
             meshFilter.sharedMesh = mesh;
 
-            //var collider = go.AddComponent<MeshCollider>();
-            //collider.cookingOptions = MeshColliderCookingOptions.WeldColocatedVertices |
-            //                          MeshColliderCookingOptions.InflateConvexMesh |
-            //                          MeshColliderCookingOptions.EnableMeshCleaning |
-            //                          MeshColliderCookingOptions.CookForFasterSimulation;
+            var collider = go.AddComponent<MeshCollider>();
+            collider.cookingOptions = MeshColliderCookingOptions.WeldColocatedVertices |
+                                      MeshColliderCookingOptions.InflateConvexMesh |
+                                      MeshColliderCookingOptions.EnableMeshCleaning |
+                                      MeshColliderCookingOptions.CookForFasterSimulation;
 
-            //collider.sharedMesh = mesh;
+            collider.sharedMesh = mesh;
         }
     }
 
-    private GameObject Load3DO(CMP cmp, _3DO threedo)
+    private GameObject Load3DO(string filename)
     {
+        var threedo = new _3DO();
+        threedo.Load3DO(@"Extracted\3do\" + filename);
+
         var geoset = threedo.Geosets.First();
         var root = new GameObject(threedo.Name);
         var gameObjects = new List<GameObject>();
-        for (int index = 0; index < threedo.HierarchyNodes.Length; index++)
+        foreach (var hierarchyNode in threedo.HierarchyNodes)
         {
-            var hierarchyNode = threedo.HierarchyNodes[index];
             var go = new GameObject(hierarchyNode.NodeName);
             hierarchyNode.Transform = go.transform;
             if (hierarchyNode.Mesh != -1)
             {
                 var tdMesh = geoset.Meshes[hierarchyNode.Mesh];
-                go.AddComponent<MeshFilter>().sharedMesh = BuildMesh(tdMesh, hierarchyNode);
-
-                //var faceMaterials = tdMesh.Faces.Select(x => x.Material).Distinct();
-                go.AddComponent<MeshRenderer>().sharedMaterial =
-                    StandardMaterial; //faceMaterials.Select(x => Materials[x]).ToArray();
+                go.AddComponent<MeshFilter>().sharedMesh = Build3DOMesh(threedo, tdMesh, hierarchyNode);
+                go.AddComponent<MeshRenderer>().sharedMaterial = StandardMaterial;
             }
             gameObjects.Add(go);
         }
@@ -258,42 +234,46 @@ public class Sith : MonoBehaviour
             go.transform.position = hierarchyNode.Translation;
             go.transform.SetParent(parent.transform, false);
         }
-
-        root.transform.rotation = Quaternion.AngleAxis(-90, Vector3.right);
+        
         root.transform.localScale = new Vector3(10, 10, 10);
+        //root.SetActive(false);
+
+        _3DOCache.Add(filename, root);
         return root;
     }
 
-    private Mesh BuildMesh(_3DOMesh tdMesh, HierarchyNode hierarchyNode)
+    private Mesh Build3DOMesh(_3DO threedo, _3DOMesh tdMesh, HierarchyNode hierarchyNode)
     {
         var mesh = new Mesh();
         var vertices = new List<Vector3>();
         var uvs = new List<Vector2>();
         var normals = new List<Vector3>();
         var triangles = new List<int>();
-
-        //var facesGroupedByMaterial = tdMesh.Faces.GroupBy(x => x.Material).ToArray();
-        //mesh.subMeshCount = facesGroupedByMaterial.Length;
-        //var submeshTriangles = new Dictionary<int, List<int>>();
-        //foreach (var facegroup in facesGroupedByMaterial)
-        //{
-        //submeshTriangles[facegroup.Key] = new List<int>();
+        var colors = new List<Color>();
 
         for (var faceIndex = 0; faceIndex < tdMesh.Faces.Length; faceIndex++)
         {
-            //var faceIndex = tdMesh.Faces.ToList().IndexOf(face);
             var face = tdMesh.Faces[faceIndex];
             var viStart = vertices.Count;
 
+            var matName = threedo.Materials[face.Material].ToLower();
+            if (!_materialLookup.ContainsKey(matName))
+            {
+                throw new Exception("Material " + matName + " not cached. Cannot continue.");
+            }
+            var material = _materialLookup[matName];
             foreach (VertexGroup t in face.Vertices)
             {
-                vertices.Add(hierarchyNode.Pivot + (Vector3)tdMesh.Vertices[t.VertexIndex]);
+                var vert = tdMesh.Vertices[t.VertexIndex];
+                var vert3 = new Vector3(-vert.x, vert.z, -vert.y);
+                vertices.Add(hierarchyNode.Pivot + vert3);
                 normals.Add(tdMesh.FaceNormals[faceIndex]);
-
-                var material = StandardMaterial; //Materials[face.Material];
+                
                 var uv = tdMesh.TextureVertices[t.TextureIndex];
-                uv.x = uv.x / material.mainTexture.width;
-                uv.y = uv.y / material.mainTexture.height;
+                colors.Add(new Color(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
+                
+                uv.x = uv.x / material.Sizes[0].x;
+                uv.y = uv.y / material.Sizes[0].y;
 
                 uvs.Add(uv);
             }
@@ -301,22 +281,18 @@ public class Sith : MonoBehaviour
             var numTriangles = face.Vertices.Length - 3 + 1;
             for (var t = 1; t <= numTriangles; t++)
             {
-                triangles.Add(viStart + t + 1);
-                triangles.Add(viStart);
                 triangles.Add(viStart + t);
+                triangles.Add(viStart);
+                triangles.Add(viStart + t + 1);
             }
         }
-        //}
 
         mesh.vertices = vertices.ToArray();
         mesh.uv = uvs.ToArray();
         mesh.normals = normals.ToArray();
-        //var i = 0;
-        //foreach (var submeshTriangle in submeshTriangles)
-        //{
-        //    mesh.SetTriangles(submeshTriangles[submeshTriangle.Key].ToArray(), i);
-        //    i++;
-        //}
+        mesh.colors = colors.ToArray();
+        mesh.triangles = triangles.ToArray();
+
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
         return mesh;
