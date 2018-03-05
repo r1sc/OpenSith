@@ -104,7 +104,7 @@ public class Sith : MonoBehaviour
                         thingGameObject = Load3DO(modelFilename);
                     
                     thingGameObject.transform.position = new Vector3(thing.X * 10, thing.Z * 10, thing.Y * 10);
-                    thingGameObject.transform.rotation = Quaternion.AngleAxis(thing.Yaw, Vector3.up);//Quaternion.Euler(thing.Pitch, thing.Yaw, thing.Roll);
+                    thingGameObject.transform.rotation = Quaternion.Euler(thing.Pitch, thing.Yaw, thing.Roll);
                 }
             }
         }
@@ -146,7 +146,8 @@ public class Sith : MonoBehaviour
             var triangles = new List<int>();
             var normals = new List<Vector3>();
             var uvs = new List<Vector2>();
-            var colors = new List<Color>();
+            var atlasPosSize = new List<Vector4>();
+            var intensities = new List<Color>();
 
             for (int i = 0; i < sector.SurfaceCount; i++)
             {
@@ -157,13 +158,17 @@ public class Sith : MonoBehaviour
                     continue;
                 
                 var viStart = vertices.Count;
-                foreach (SurfaceVertexGroup t in surface.SurfaceVertexGroups)
+                for (var s = 0; s < surface.SurfaceVertexGroups.Length; s++)
                 {
+                    SurfaceVertexGroup t = surface.SurfaceVertexGroups[s];
                     var vertIndex = t.VertexIdx;
                     var vert = new Vector3(jkl.WorldVertices[vertIndex].x, jkl.WorldVertices[vertIndex].z,
                         jkl.WorldVertices[vertIndex].y);
                     vertices.Add(vert);
                     normals.Add(new Vector3(surface.SurfaceNormal.x, surface.SurfaceNormal.z, surface.SurfaceNormal.y));
+
+                    var intensity = surface.Intensities[s];
+                    intensities.Add(new Color(intensity, intensity, intensity));
 
                     var uv = t.TextureVertex;
                     if (uv.HasValue)
@@ -171,12 +176,18 @@ public class Sith : MonoBehaviour
                         var material = _materialLookup[surface.Material.Name.ToLower()];
 
                         var uv2 = uv.Value;
-                        colors.Add(new Color(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
+                        atlasPosSize.Add(new Vector4(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width,
+                            material.Rects[0].height));
 
                         uv2.x = uv2.x / material.Sizes[0].x;
                         uv2.y = uv2.y / material.Sizes[0].y;
-                        
+
                         uvs.Add(uv2);
+                    }
+                    else
+                    {
+                        uvs.Add(Vector2.zero);
+                        atlasPosSize.Add(new Vector4(0, 0, 0, 0));
                     }
                 }
 
@@ -189,11 +200,13 @@ public class Sith : MonoBehaviour
                 }
             }
 
-            mesh.vertices = vertices.ToArray();
-            mesh.uv = uvs.ToArray();
-            mesh.normals = normals.ToArray();
-            mesh.triangles = triangles.ToArray();
-            mesh.colors = colors.ToArray();
+            mesh.SetVertices(vertices);
+            mesh.SetUVs(0, uvs);
+            mesh.SetUVs(1, atlasPosSize);
+            mesh.SetColors(intensities);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(triangles, 0);
+            
             meshFilter.sharedMesh = mesh;
 
             var collider = go.AddComponent<MeshCollider>();
@@ -249,7 +262,7 @@ public class Sith : MonoBehaviour
         var uvs = new List<Vector2>();
         var normals = new List<Vector3>();
         var triangles = new List<int>();
-        var colors = new List<Color>();
+        var atlasPosSize = new List<Vector4>();
 
         for (var faceIndex = 0; faceIndex < tdMesh.Faces.Length; faceIndex++)
         {
@@ -270,7 +283,7 @@ public class Sith : MonoBehaviour
                 normals.Add(tdMesh.FaceNormals[faceIndex]);
                 
                 var uv = tdMesh.TextureVertices[t.TextureIndex];
-                colors.Add(new Color(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
+                atlasPosSize.Add(new Vector4(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
                 
                 uv.x = uv.x / material.Sizes[0].x;
                 uv.y = uv.y / material.Sizes[0].y;
@@ -286,15 +299,16 @@ public class Sith : MonoBehaviour
                 triangles.Add(viStart + t + 1);
             }
         }
+        
+        mesh.SetVertices(vertices);
+        mesh.SetUVs(0, uvs);
+        mesh.SetUVs(1, atlasPosSize);
+        mesh.SetNormals(normals);
+        mesh.SetTriangles(triangles, 0);
 
-        mesh.vertices = vertices.ToArray();
-        mesh.uv = uvs.ToArray();
-        mesh.normals = normals.ToArray();
-        mesh.colors = colors.ToArray();
-        mesh.triangles = triangles.ToArray();
 
         mesh.RecalculateBounds();
-        mesh.RecalculateNormals();
+        //mesh.RecalculateNormals();
         return mesh;
     }
 }
