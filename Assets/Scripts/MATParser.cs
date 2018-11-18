@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net.Mime;
 using System.Reflection;
 using System.Text;
-using TreeEditor;
 using UnityEngine;
 
 namespace Assets.Scripts
@@ -15,11 +14,11 @@ namespace Assets.Scripts
     {
         public Texture2D[] Textures { get; set; }
 
-        public void ParseMat(CMP cmp, string path)
+        public void ParseMat(CMP cmp, Stream dataStream)
         {
             var transparentColor = new Color32(0, 0, 0, 0);
 
-            using (var br = new BinaryReader(new FileStream(path, FileMode.Open)))
+            using (var br = new BinaryReader(dataStream))
             {
                 var rectList = new List<Rect>();
 
@@ -48,7 +47,7 @@ namespace Assets.Scripts
                     {
                         Textures[i] = new Texture2D(8, 8, TextureFormat.ARGB32, false);
                         var pixels = new Color32[64];
-                        var color = cmp.GetColor((byte) colorNum);
+                        var color = cmp.GetColor((byte)colorNum);
                         for (int xy = 0; xy < 64; xy++)
                         {
                             pixels[xy] = color;
@@ -105,9 +104,9 @@ namespace Assets.Scripts
         public byte[] LightLevels { get; set; }
         public byte[] Transparency { get; set; }
 
-        public void ParseCMP(string path)
+        public void ParseCMP(Stream dataStream)
         {
-            using (var br = new BinaryReader(new FileStream(path, FileMode.Open)))
+            using (var br = new BinaryReader(dataStream))
             {
                 var cmpHdr = br.ReadChars(4);
                 var version = br.ReadInt32();

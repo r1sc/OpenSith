@@ -12,10 +12,10 @@ public class Sith : MonoBehaviour
     public Texture2D Atlas;
     public Material StandardMaterial;
 
-    // ReSharper disable once InconsistentNaming
-	public string JKLToLoad;
-    // ReSharper disable once InconsistentNaming
-    public string AnimKEYToLoad;
+    public string JKLToLoad;
+    public string GamePath;
+    private GOBManager _gobManager;
+
 
     private class TexInfo
     {
@@ -25,7 +25,7 @@ public class Sith : MonoBehaviour
 
     private CMP _cmp;
     private readonly Dictionary<string, TexInfo> _materialLookup = new Dictionary<string, TexInfo>();
-    private Dictionary<string, GameObject> _3DOCache = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, GameObject> _3DOCache = new Dictionary<string, GameObject>();
 
     private void LoadTextures(IEnumerable<string> matFilenames)
     {
@@ -39,11 +39,11 @@ public class Sith : MonoBehaviour
                 continue;
             }
             var mat = new MAT();
-            var matPath = @"Extracted\3do\mat\" + matFilename;
-            if (!File.Exists(matPath))
-                matPath = @"Extracted\mat\" + matFilename;
+            var matPath = @"3do\mat\" + matFilename;
+            if (!_gobManager.Exists(matPath))
+                matPath = @"mat\" + matFilename;
 
-            mat.ParseMat(_cmp, matPath);
+            mat.ParseMat(_cmp, _gobManager.GetStream(matPath));
             textures.Add(matFilename.ToLower(), new[] { mat.Textures[0] });
         }
 
@@ -68,7 +68,7 @@ public class Sith : MonoBehaviour
                 Rects = subrects,
                 Sizes = sizes.ToArray()
             };
-            
+
             rectsOffset += numTextures;
         }
     }
@@ -76,19 +76,19 @@ public class Sith : MonoBehaviour
     // Use this for initialization
     void Start()
     {
+        _gobManager = new GOBManager(GamePath, new[] { Path.Combine(GamePath, "Resource\\Res1hi.gob"), Path.Combine(GamePath, "Resource\\Res2.gob"), Path.Combine(GamePath, "Episode\\JK1.GOB") });
+
         _cmp = new CMP();
         Atlas = new Texture2D(256, 256, TextureFormat.ARGB32, true);
         StandardMaterial.mainTexture = Atlas;
-        //Atlas.alphaIsTransparency = true;
-        
+
         if (!string.IsNullOrEmpty(JKLToLoad))
         {
             var jkl = new JKL();
-            var jklParser = new JKLParser(jkl,
-                new FileStream(@"Extracted\jkl\" + JKLToLoad, FileMode.Open));
+            var jklParser = new JKLParser(jkl, _gobManager.GetStream(@"jkl\" + JKLToLoad)); //new FileStream(@"Extracted\jkl\" + JKLToLoad, FileMode.Open));
             jklParser.Parse();
 
-            _cmp.ParseCMP(@"Extracted\misc\cmp\" + jkl.WorldColorMaps[0]);
+            _cmp.ParseCMP(_gobManager.GetStream(@"misc\cmp\" + jkl.WorldColorMaps[0]));
             LoadTextures(jkl.Materials.Take(jkl.ActualNumberOfMaterials).Select(m => m.Name).ToArray());
             BuildMapSectors(jkl);
 
@@ -102,30 +102,12 @@ public class Sith : MonoBehaviour
                         thingGameObject = Instantiate(_3DOCache[modelFilename]);
                     else
                         thingGameObject = Load3DO(modelFilename);
-                    
+
                     thingGameObject.transform.position = new Vector3(thing.X * 10, thing.Z * 10, thing.Y * 10);
                     thingGameObject.transform.rotation = Quaternion.Euler(thing.Pitch, thing.Yaw, thing.Roll);
                 }
             }
         }
-        
-
-        //if (!string.IsNullOrEmpty(_3DOToLoad))
-        //{
-        //    var threedoGameObject = Load3DO(_3DOToLoad);
-        //    if (!string.IsNullOrEmpty(AnimKEYToLoad))
-        //    {
-        //        var keyParser = new KEYParser();
-        //        var animClip = keyParser.Parse(threedo, threedoGameObject.transform,
-        //            @"Extracted\3do\key\" + AnimKEYToLoad);
-        //        var anim = (Animation) threedoGameObject.AddComponent(typeof(Animation));
-
-        //        animClip.wrapMode = WrapMode.Loop;
-        //        anim.clip = animClip;
-        //        anim.AddClip(animClip, keyParser.Name);
-        //        anim.Play();
-        //    }
-        //}
     }
 
     private void BuildMapSectors(JKL jkl)
@@ -156,7 +138,7 @@ public class Sith : MonoBehaviour
                 var surface = jkl.WorldSurfaces[surfaceIdx];
                 if (surface.Adjoin != null)
                     continue;
-                
+
                 var viStart = vertices.Count;
                 for (var s = 0; s < surface.SurfaceVertexGroups.Length; s++)
                 {
@@ -167,7 +149,7 @@ public class Sith : MonoBehaviour
                     vertices.Add(vert);
                     normals.Add(new Vector3(surface.SurfaceNormal.x, surface.SurfaceNormal.z, surface.SurfaceNormal.y));
 
-                    var intensity = surface.Intensities[s];
+                    var intensity = Mathf.Clamp01(surface.Intensities[s]);
                     intensities.Add(new Color(intensity, intensity, intensity));
 
                     var uv = t.TextureVertex;
@@ -206,7 +188,7 @@ public class Sith : MonoBehaviour
             mesh.SetColors(intensities);
             mesh.SetNormals(normals);
             mesh.SetTriangles(triangles, 0);
-            
+
             meshFilter.sharedMesh = mesh;
 
             var collider = go.AddComponent<MeshCollider>();
@@ -222,7 +204,7 @@ public class Sith : MonoBehaviour
     private GameObject Load3DO(string filename)
     {
         var threedo = new _3DO();
-        threedo.Load3DO(@"Extracted\3do\" + filename);
+        threedo.Load3DO(filename, _gobManager.GetStream(@"3do\" + filename));
 
         var geoset = threedo.Geosets.First();
         var root = new GameObject(threedo.Name);
@@ -247,7 +229,7 @@ public class Sith : MonoBehaviour
             go.transform.position = hierarchyNode.Translation;
             go.transform.SetParent(parent.transform, false);
         }
-        
+
         root.transform.localScale = new Vector3(10, 10, 10);
         //root.SetActive(false);
 
@@ -281,10 +263,10 @@ public class Sith : MonoBehaviour
                 var vert3 = new Vector3(-vert.x, vert.z, -vert.y);
                 vertices.Add(hierarchyNode.Pivot + vert3);
                 normals.Add(tdMesh.FaceNormals[faceIndex]);
-                
+
                 var uv = tdMesh.TextureVertices[t.TextureIndex];
                 atlasPosSize.Add(new Vector4(material.Rects[0].x, material.Rects[0].y, material.Rects[0].width, material.Rects[0].height));
-                
+
                 uv.x = uv.x / material.Sizes[0].x;
                 uv.y = uv.y / material.Sizes[0].y;
 
@@ -299,7 +281,7 @@ public class Sith : MonoBehaviour
                 triangles.Add(viStart + t + 1);
             }
         }
-        
+
         mesh.SetVertices(vertices);
         mesh.SetUVs(0, uvs);
         mesh.SetUVs(1, atlasPosSize);

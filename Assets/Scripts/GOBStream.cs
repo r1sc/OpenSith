@@ -1,8 +1,9 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 using UnityEngine;
 
-namespace jksharp.jklviewer
+namespace Assets.Scripts
 {
     public class GOBRecord
     {
@@ -38,9 +39,22 @@ namespace jksharp.jklviewer
                 {
                     Offset = br.ReadInt32(),
                     Length = br.ReadInt32(),
-                    Name = new string(br.ReadChars(128)).Trim('\0')
+                    Name = ReadChars(br, 128)
                 };
             }
+        }
+
+        private string ReadChars(BinaryReader br, int count)
+        {
+            var data = br.ReadBytes(count);
+            var sb = new StringBuilder(count);
+            foreach (var b in data)
+            {
+                if (b == 0)
+                    break;
+                sb.Append((char)b);
+            }
+            return sb.ToString();
         }
 
         public Stream GetRecordStream(GOBRecord record)

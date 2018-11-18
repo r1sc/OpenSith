@@ -5,8 +5,10 @@ using jksharp.jklviewer;
 using UnityEditor;
 using UnityEngine;
 using System.Collections;
+using Assets.Scripts;
 
-public class SithEditor : EditorWindow {
+public class SithEditor : EditorWindow
+{
     [MenuItem("Window/Sith")]
     public static void ShowWindow()
     {
@@ -27,13 +29,13 @@ public class SithEditor : EditorWindow {
         _jkPath = EditorGUILayout.TextField("Jedi Knight path", _jkPath);
         if (GUILayout.Button("Find GOBs"))
         {
-            _gobFiles = Directory.GetFiles(_jkPath, "*.gob", SearchOption.AllDirectories).Select(x => new GobFile{ Path = x.Replace(_jkPath + "\\", ""), Enabled = false}).ToArray();
+            _gobFiles = Directory.GetFiles(_jkPath, "*.gob", SearchOption.AllDirectories).Select(x => new GobFile { Path = x.Replace(_jkPath + "\\", ""), Enabled = false }).ToArray();
         }
 
         if (_gobFiles != null)
         {
             _gobFilesEnabled = EditorGUILayout.BeginToggleGroup("GOB Files", _gobFilesEnabled);
-            foreach(var gobFile in _gobFiles)
+            foreach (var gobFile in _gobFiles)
             {
                 gobFile.Enabled = EditorGUILayout.Toggle(gobFile.Path, gobFile.Enabled);
             }
@@ -45,7 +47,7 @@ public class SithEditor : EditorWindow {
         {
             foreach (var gobFile in _gobFiles.Where(x => x.Enabled))
             {
-                using (GOBStream stream = new GOBStream(Path.Combine(_jkPath, gobFile.Path)))
+                using (var stream = new GOBStream(Path.Combine(_jkPath, gobFile.Path)))
                 {
                     stream.Extract(Path.Combine(_assetPath, gobFile.Path));
                 }

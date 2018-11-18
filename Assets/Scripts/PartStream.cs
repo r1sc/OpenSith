@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace jksharp.jklviewer
+namespace Assets.Scripts
 {
     class PartStream : Stream
     {
@@ -56,7 +56,7 @@ namespace jksharp.jklviewer
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            count = (int) Math.Min(count, Length - Position);
+            count = (int)Math.Min(count, Length - Position);
             var readBytes = _stream.Read(buffer, offset, count);
             Position = _stream.Position - _start;
             return readBytes;

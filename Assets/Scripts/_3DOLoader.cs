@@ -31,20 +31,20 @@ namespace Assets.Scripts
             }
         }
 
-        public void Load3DO(string path)
+        public void Load3DO(string fileName, Stream dataStream)
         {
-            Name = Path.GetFileNameWithoutExtension(path);
+            Name = Path.GetFileNameWithoutExtension(fileName);
 
             string section = "";
             Geoset currentGeoset = null;
             _3DOMesh currentMesh = null;
 
-            using (sr = new StreamReader(path))
+            using (sr = new StreamReader(dataStream))
             {
                 while (!sr.EndOfStream)
                 {
                     ReadLine();
-                    
+
                     if (_line.StartsWith("SECTION: "))
                     {
                         section = _line;
@@ -118,7 +118,7 @@ namespace Assets.Scripts
                             for (int i = 0; i < currentMesh.TextureVertices.Length; i++)
                             {
                                 ReadLine();
-                                var idx = int.Parse(_args[0].Replace(":",""));
+                                var idx = int.Parse(_args[0].Replace(":", ""));
                                 var x = float.Parse(_args[1]);
                                 var y = float.Parse(_args[2]);
                                 currentMesh.TextureVertices[idx] = new Vector2(x, y);
@@ -153,9 +153,9 @@ namespace Assets.Scripts
                                 var extraLight = float.Parse(_args[6]);
                                 var numVerts = int.Parse(_args[7]);
                                 face.Vertices = new VertexGroup[numVerts];
-                                for (int j = 0; j < numVerts*2; j+=2)
+                                for (int j = 0; j < numVerts * 2; j += 2)
                                 {
-                                    var vIdx = j/2;
+                                    var vIdx = j / 2;
                                     var vvIdx = int.Parse(_args[8 + j + 0].Replace(",", ""));
                                     var tvIdx = int.Parse(_args[8 + j + 1].Replace(",", ""));
                                     face.Vertices[vIdx] = new VertexGroup
@@ -246,7 +246,7 @@ namespace Assets.Scripts
 
     class _3DOLoader
     {
-        
+
     }
 
     internal class VertexGroup
@@ -255,12 +255,14 @@ namespace Assets.Scripts
         public int TextureIndex { get; set; }
     }
 
-    internal class Face {
+    internal class Face
+    {
         public VertexGroup[] Vertices { get; set; }
         public int Material { get; set; }
     }
 
-    internal class _3DOMesh {
+    internal class _3DOMesh
+    {
         public float Radius { get; set; }
         public Vector4[] Vertices { get; set; }
         public Vector2[] TextureVertices { get; set; }
@@ -270,7 +272,8 @@ namespace Assets.Scripts
         public string Name { get; set; }
     }
 
-    internal class Geoset {
+    internal class Geoset
+    {
         public _3DOMesh[] Meshes { get; set; }
     }
 }
