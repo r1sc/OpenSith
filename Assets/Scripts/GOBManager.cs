@@ -21,16 +21,12 @@ namespace Assets.Scripts
             _extractedPath = Path.Combine(gamePath, "Extracted");
 
             _recordDict = new Dictionary<string, GOBRecordEntry>();
-            using (var sw = new StreamWriter("E:\\test.txt"))
+            foreach (var gobFile in gobFiles)
             {
-                foreach (var gobFile in gobFiles)
+                var gob = new GOBStream(Path.Combine(gamePath, gobFile));
+                foreach (var record in gob.Records)
                 {
-                    var gob = new GOBStream(Path.Combine(gamePath, gobFile));
-                    foreach (var record in gob.Records)
-                    {
-                        sw.WriteLine(record.Name);
-                        _recordDict.Add(record.Name.ToLower(), new GOBRecordEntry { GOBStream = gob, GOBRecord = record });
-                    }
+                    _recordDict.Add(record.Name.ToLower(), new GOBRecordEntry { GOBStream = gob, GOBRecord = record });
                 }
             }
         }
