@@ -24,10 +24,10 @@ class KEYParser
         }
     }
 
-    public AnimationClip Parse(_3DO threedo, Transform root, string path)
+    public AnimationClip Parse(_3DO threedo, Transform root, string filename, Stream dataStream)
     {
         var animationClip = new AnimationClip();
-        Name = Path.GetFileNameWithoutExtension(path);
+        Name = Path.GetFileNameWithoutExtension(filename);
 
         string section = "";
         int numFrames = 0;
@@ -39,7 +39,7 @@ class KEYParser
         AnimationCurve curveXR, curveYR, curveZR, curveWR;
         curveX = curveY = curveZ = curveXR = curveYR = curveZR = curveWR = null;
 
-        using (sr = new StreamReader(path))
+        using (sr = new StreamReader(dataStream))
         {
             while (!sr.EndOfStream)
             {
@@ -129,19 +129,19 @@ class KEYParser
                             curveZ.AddKey(numFrames / fps, -y);
                         }
 
-                        var quat = Quaternion.Euler(pitch, -yaw, roll);
+                        var quaternion = Quaternion.Euler(pitch, -yaw, roll);
                                    
-                        curveXR.AddKey(frame / fps, quat.x);
-                        curveYR.AddKey(frame / fps, quat.y);
-                        curveZR.AddKey(frame / fps, quat.z);
-                        curveWR.AddKey(frame / fps, quat.w);
+                        curveXR.AddKey(frame / fps, quaternion.x);
+                        curveYR.AddKey(frame / fps, quaternion.y);
+                        curveZR.AddKey(frame / fps, quaternion.z);
+                        curveWR.AddKey(frame / fps, quaternion.w);
 
                         if (curveXR.length == 1)
                         {
-                            curveXR.AddKey(numFrames / fps, quat.x);
-                            curveYR.AddKey(numFrames / fps, quat.y);
-                            curveZR.AddKey(numFrames / fps, quat.z);
-                            curveWR.AddKey(numFrames / fps, quat.w);
+                            curveXR.AddKey(numFrames / fps, quaternion.x);
+                            curveYR.AddKey(numFrames / fps, quaternion.y);
+                            curveZR.AddKey(numFrames / fps, quaternion.z);
+                            curveWR.AddKey(numFrames / fps, quaternion.w);
                         }
 
 
@@ -168,6 +168,7 @@ class KEYParser
         animationClip.legacy = true;
         animationClip.name = Name;
         animationClip.EnsureQuaternionContinuity();
+        animationClip.wrapMode = WrapMode.Loop;
         return animationClip;
     }
 
@@ -177,7 +178,7 @@ class KEYParser
             return "";
 
         var path = transformToFind.name;
-        while (transformToFind.parent != root)
+        while (transformToFind.parent != root && transformToFind.parent != null)
         {
             path = transformToFind.parent.name + "/" + path;
             transformToFind = transformToFind.parent;

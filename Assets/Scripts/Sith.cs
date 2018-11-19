@@ -23,9 +23,15 @@ public class Sith : MonoBehaviour
         public Vector2[] Sizes;
     }
 
+    private class ThreedoLoadResult
+    {
+        public _3DO Threedo { get; set; }
+        public GameObject GameObject { get; set; }
+    }
+
     private CMP _cmp;
     private readonly Dictionary<string, TexInfo> _materialLookup = new Dictionary<string, TexInfo>();
-    private readonly Dictionary<string, GameObject> _3DOCache = new Dictionary<string, GameObject>();
+    private readonly Dictionary<string, ThreedoLoadResult> _3DOCache = new Dictionary<string, ThreedoLoadResult>();
 
     private void LoadTextures(IEnumerable<string> matFilenames)
     {
@@ -97,15 +103,49 @@ public class Sith : MonoBehaviour
                 if (thing.Template.Parameters.ContainsKey("model3d"))
                 {
                     var modelFilename = thing.Template.Parameters["model3d"];
+
+                    _3DO threedo;
                     GameObject thingGameObject;
                     if (_3DOCache.ContainsKey(modelFilename))
-                        thingGameObject = Instantiate(_3DOCache[modelFilename]);
+                    {
+                        var threedoLoadResult = _3DOCache[modelFilename];
+                        threedo = threedoLoadResult.Threedo;
+                        thingGameObject = Instantiate(threedoLoadResult.GameObject);
+                    }
                     else
-                        thingGameObject = Load3DO(modelFilename);
+                    {
+                        var threedoLoadResult = Load3DO(modelFilename);
+                        threedo = threedoLoadResult.Threedo;
+                        thingGameObject = threedoLoadResult.GameObject;
+                    }
 
                     thingGameObject.transform.position = new Vector3(thing.X * 10, thing.Z * 10, thing.Y * 10);
                     thingGameObject.transform.rotation = Quaternion.Euler(thing.Pitch, thing.Yaw, thing.Roll);
+
+                    if (thing.Template.Parameters.ContainsKey("puppet"))
+                    {
+                        var puppetFilename = thing.Template.Parameters["puppet"];
+                        var puppet = PUPPETParser.Parse(_gobManager.GetStream(@"misc\pup\" + puppetFilename));
+                        var kp = new KEYParser();
+
+                        if (puppet.Modes.ContainsKey(0) && puppet.Modes[0].ContainsKey("stand"))
+                        {
+                            var keyFilename = puppet.Modes[0]["stand"].KeyFile;
+                            var animClip = kp.Parse(threedo, thingGameObject.transform, keyFilename,
+                                _gobManager.GetStream(@"3do\key\" + keyFilename));
+
+                            var anim = thingGameObject.GetComponent<Animation>();
+                            if (anim == null)
+                            {
+                                anim = thingGameObject.AddComponent<Animation>();
+                                anim.AddClip(animClip, animClip.name);
+                            }
+                            anim.Play(animClip.name);
+                        }
+                    }
                 }
+
+                
             }
         }
     }
@@ -201,7 +241,7 @@ public class Sith : MonoBehaviour
         }
     }
 
-    private GameObject Load3DO(string filename)
+    private ThreedoLoadResult Load3DO(string filename)
     {
         var threedo = new _3DO();
         threedo.Load3DO(filename, _gobManager.GetStream(@"3do\" + filename));
@@ -233,8 +273,13 @@ public class Sith : MonoBehaviour
         root.transform.localScale = new Vector3(10, 10, 10);
         //root.SetActive(false);
 
-        _3DOCache.Add(filename, root);
-        return root;
+        var result = new ThreedoLoadResult
+        {
+            Threedo = threedo,
+            GameObject = root
+        };
+        _3DOCache.Add(filename, result);
+        return result;
     }
 
     private Mesh Build3DOMesh(_3DO threedo, _3DOMesh tdMesh, HierarchyNode hierarchyNode)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -45,6 +46,9 @@ namespace Assets.Scripts
                 Debug.Log("GOBManager [DISK]: Loading " + lowerName);
                 return new FileStream(Path.Combine(_extractedPath, name), FileMode.Open);
             }
+
+            if(!_recordDict.ContainsKey(lowerName))
+                throw new Exception("Cannot find file in GOB: " + lowerName);
 
             Debug.Log("GOBManager: Loading " + lowerName);
             var recordEntry = _recordDict[lowerName];
