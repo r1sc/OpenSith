@@ -64,7 +64,7 @@ namespace Assets.Scripts
 
         public uint Width { get { return _w; } }
         public uint Height { get { return _h; } }
-        public double MillisecondsPerFrame { get { return Math.Round(_usf / 1000.0) + 1; } }
+        public double MillisecondsPerFrame { get { return _usf / 1000.0; } }
         public Texture2D Texture { get; private set; }
         public AudioClip AudioClip { get; private set; }
 
@@ -84,14 +84,10 @@ namespace Assets.Scripts
             if (smk_info_audio(_smk, out _trackMask, _channels, _bitdepth, _audioRate) < 0)
                 throw new Exception("Failed to get audio info");
 
-            _audioSize = smk_get_audio_size(_smk, 0);
-            _audioPtr = smk_get_audio(_smk, 0);
-
             var samplerate = (int)_audioRate[0];
             var secondsPerFrame = _usf / 1000000.0;
-            var videoLengthInSecs = _frame_count * secondsPerFrame;
-            AudioClip = AudioClip.Create("Smacker Audio", (int)(samplerate * videoLengthInSecs), 2, samplerate, true);
-            
+            var videoLengthInSecs = (_frame_count + 1) * secondsPerFrame;
+            AudioClip = AudioClip.Create("Smacker Audio", (int)(samplerate * videoLengthInSecs), _channels[0], samplerate, true, OnReadSample);
 
             smk_enable_video(_smk, 1);
             smk_enable_audio(_smk, 0, 1);
@@ -110,14 +106,15 @@ namespace Assets.Scripts
         private byte[] _currentAudioBuffer;
         private Queue<byte[]> _buffers = new Queue<byte[]>();
         private int _audioBufferIdx;
-        
+
         void OnReadSample(float[] data)
         {
+            var bitDepth = _bitdepth[0];
             for (int i = 0; i < data.Length; i++)
             {
                 float value = 0;
                 bool gotBuffer = true;
-                if (_currentAudioBuffer == null || _audioBufferIdx > _currentAudioBuffer.Length - 2)
+                if (_currentAudioBuffer == null || _audioBufferIdx == _currentAudioBuffer.Length)
                 {
                     if (_buffers.Count > 0)
                     {
@@ -130,31 +127,36 @@ namespace Assets.Scripts
                         gotBuffer = false;
                     }
                 }
-                if(gotBuffer)
-                    value = (ushort)((_currentAudioBuffer[_audioBufferIdx + 1] << 8) | _currentAudioBuffer[_audioBufferIdx]) / (float)ushort.MaxValue - 0.5f;
+                if (gotBuffer)
+                {
+                    if (bitDepth == 8)
+                        value = _currentAudioBuffer[_audioBufferIdx] / 255.0f - 0.5f;
+                    else if (bitDepth == 16)
+                        value = (short)((_currentAudioBuffer[_audioBufferIdx + 1] << 8) | _currentAudioBuffer[_audioBufferIdx]) / (float)short.MaxValue;
+                }
 
                 data[i] = value;
-                _audioBufferIdx += 2;
+                if (bitDepth == 16)
+                    _audioBufferIdx += 2;
+                else if (bitDepth == 8)
+                    _audioBufferIdx++;
             }
         }
 
         public void RenderVideo()
         {
+            smk_next(_smk);
+
             _audioSize = smk_get_audio_size(_smk, 0);
             _audioPtr = smk_get_audio(_smk, 0);
-            var newAudioBuffer = new byte[_audioSize];
-            Marshal.Copy(_audioPtr, newAudioBuffer, 0, newAudioBuffer.Length);
-            _buffers.Enqueue(newAudioBuffer);
-            
+            var audio = new byte[_audioSize];
+            Marshal.Copy(_audioPtr, audio, 0, audio.Length);
+            _buffers.Enqueue(audio);
+
             render24bpp(_smk, _videoBuffer24bpp, _w * _h, false);
 
             Texture.LoadRawTextureData(_videoBuffer24bpp, (int)(_w * _h * 3));
             Texture.Apply(false);
-        }
-
-        public void Next()
-        {
-            smk_next(_smk);
         }
     }
 }

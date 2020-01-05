@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Assets.Scripts;
@@ -82,6 +83,8 @@ public class Sith : MonoBehaviour
     // Use this for initialization
     void Start()
     {
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-us");
+
         _gobManager = new GOBManager(GamePath, new[] { Path.Combine(GamePath, "Resource\\Res1hi.gob"), Path.Combine(GamePath, "Resource\\Res2.gob"), Path.Combine(GamePath, "Episode\\JK1.GOB") });
 
         _cmp = new CMP();
@@ -145,7 +148,7 @@ public class Sith : MonoBehaviour
                     }
                 }
 
-                
+
             }
         }
     }
@@ -233,7 +236,6 @@ public class Sith : MonoBehaviour
 
             var collider = go.AddComponent<MeshCollider>();
             collider.cookingOptions = MeshColliderCookingOptions.WeldColocatedVertices |
-                                      MeshColliderCookingOptions.InflateConvexMesh |
                                       MeshColliderCookingOptions.EnableMeshCleaning |
                                       MeshColliderCookingOptions.CookForFasterSimulation;
 
