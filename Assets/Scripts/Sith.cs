@@ -5,11 +5,14 @@ using System.IO;
 using System.Linq;
 using Assets.Scripts;
 using jksharp.jklviewer.JKL;
+using UnityEditor;
 using UnityEngine;
 using Material = UnityEngine.Material;
 
 public class Sith : MonoBehaviour
 {
+    public QuadTree SectorQuadTree;
+
     public Texture2D Atlas;
     public Material StandardMaterial;
 
@@ -31,8 +34,114 @@ public class Sith : MonoBehaviour
     }
 
     private CMP _cmp;
+    private Camera _camera;
+    private JKL _jkl;
     private readonly Dictionary<string, TexInfo> _materialLookup = new Dictionary<string, TexInfo>();
     private readonly Dictionary<string, ThreedoLoadResult> _3DOCache = new Dictionary<string, ThreedoLoadResult>();
+
+    private HashSet<int> DrawnSectors = new HashSet<int>();
+
+    struct ClippedAdjoin
+    {
+        public List<Vector3> Polygon;
+        public int SectorIndex;
+    }
+    private List<ClippedAdjoin> clippedAdjoins = new List<ClippedAdjoin>();
+
+    public void Update()
+    {
+        DrawnSectors.Clear();
+        clippedAdjoins.Clear();
+
+        var cameraSector = SectorQuadTree.GetSectorContaining(_camera.transform.position / 10.0f);
+
+        if (cameraSector != null)
+        {
+            Debug.Log("Drawing sector " + cameraSector.BoundingBox);
+            var matrix = Matrix4x4.Scale(Vector3.one * 10);
+
+            var cameraClippingPlanes = GeometryUtility.CalculateFrustumPlanes(_camera);
+            DrawSector(cameraSector, matrix, cameraClippingPlanes);
+        }
+    }
+
+    /*
+    function DrawSector(sector, clippingPlanes):
+        if HasBeenDrawnThisFrame(sector):
+            return
+
+        foreach portal in sector:
+            clippedPortalPolygon = ClipPortal(portal.polygon, clippingPlanes)
+            if clippedPortalPolygon.length > 0
+                DrawSector(portal.othersector, clippedPortalPolygon)
+
+    */
+
+    void OnDrawGizmos()
+    {
+        if (SectorQuadTree == null)
+            return;
+
+        Gizmos.color = Color.magenta;
+        var cameraSector = SectorQuadTree.GetSectorContaining(_camera.transform.position / 10.0f);
+        Gizmos.DrawWireCube(cameraSector.BoundingBox.center * 10, cameraSector.BoundingBox.size * 10);
+
+        Gizmos.color = Color.cyan;
+        foreach (var adjoin in cameraSector.Adjoins)
+        {
+            DrawGizmoPolygon(adjoin.SurfaceVertices);
+        }
+
+        Gizmos.color = Color.green;
+        foreach (var clippedAdjoin in clippedAdjoins)
+        {
+            DrawGizmoPolygon(clippedAdjoin.Polygon);
+            Handles.Label(clippedAdjoin.Polygon[0], "Sector " + clippedAdjoin.SectorIndex);
+        }
+
+    }
+
+    void DrawGizmoPolygon(List<Vector3> polygon)
+    {
+        for (int i = 0; i < polygon.Count; i++)
+        {
+            var v1 = polygon[i];
+            var v2 = polygon[(i + 1) % polygon.Count];
+            Gizmos.DrawLine(v1, v2);
+        }
+    }
+
+    private void DrawSector(Sector sector, Matrix4x4 matrix, IEnumerable<Plane> clippingPlanes)
+    {
+        if (DrawnSectors.Contains(sector.Index))
+            return;
+
+        DrawnSectors.Add(sector.Index);
+        if (sector.Index == 376)
+            Graphics.DrawMesh(sector.Mesh, matrix, StandardMaterial, 0);
+
+        foreach (var adjoin in sector.Adjoins)
+        {
+            var otherSurface = _jkl.WorldAdjoins[adjoin.Mirror].Surface;
+
+
+            var clippedAdjoin = PolygonClipping.SutherlandHodgemanClipPolygon(adjoin.SurfaceVertices, clippingPlanes);
+            if (clippedAdjoin.Count > 0)
+            {
+                var newClippingPlanes = PolygonClipping.CreatePlanesFromVertices(clippedAdjoin);
+
+                // if (otherSector.Index == sector.Index)
+                //     otherSector = adjoin.Surface.Sector;
+
+                clippedAdjoins.Add(new ClippedAdjoin { Polygon = clippedAdjoin, SectorIndex = otherSurface.Sector.Index });
+
+
+                DrawSector(otherSurface.Sector, matrix, newClippingPlanes);
+
+            }
+
+        }
+    }
 
     private void LoadTextures(IEnumerable<string> matFilenames)
     {
@@ -83,6 +192,7 @@ public class Sith : MonoBehaviour
     // Use this for initialization
     void Start()
     {
+        _camera = Camera.main;
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-us");
 
         _gobManager = new GOBManager(GamePath, new[] { Path.Combine(GamePath, "Resource\\Res1hi.gob"), Path.Combine(GamePath, "Resource\\Res2.gob"), Path.Combine(GamePath, "Episode\\JK1.GOB") });
@@ -93,15 +203,15 @@ public class Sith : MonoBehaviour
 
         if (!string.IsNullOrEmpty(JKLToLoad))
         {
-            var jkl = new JKL();
-            var jklParser = new JKLParser(jkl, _gobManager.GetStream(@"jkl\" + JKLToLoad)); //new FileStream(@"Extracted\jkl\" + JKLToLoad, FileMode.Open));
+            _jkl = new JKL();
+            var jklParser = new JKLParser(_jkl, _gobManager.GetStream(@"jkl\" + JKLToLoad)); //new FileStream(@"Extracted\jkl\" + JKLToLoad, FileMode.Open));
             jklParser.Parse();
 
-            _cmp.ParseCMP(_gobManager.GetStream(@"misc\cmp\" + jkl.WorldColorMaps[0]));
-            LoadTextures(jkl.Materials.Take(jkl.ActualNumberOfMaterials).Select(m => m.Name).ToArray());
-            BuildMapSectors(jkl);
+            _cmp.ParseCMP(_gobManager.GetStream(@"misc\cmp\" + _jkl.WorldColorMaps[0]));
+            LoadTextures(_jkl.Materials.Take(_jkl.ActualNumberOfMaterials).Select(m => m.Name).ToArray());
+            BuildMapSectors();
 
-            foreach (var thing in jkl.Things)
+            foreach (var thing in _jkl.Things)
             {
                 if (thing.Template.Parameters.ContainsKey("model3d"))
                 {
@@ -153,19 +263,32 @@ public class Sith : MonoBehaviour
         }
     }
 
-    private void BuildMapSectors(JKL jkl)
+    private void BuildMapSectors()
     {
-        for (var sectorIdx = 0; sectorIdx < jkl.Sectors.Length; sectorIdx++)
+        var minmax = new Bounds(Vector3.zero, Vector3.zero);
+        foreach (var sector in _jkl.Sectors)
         {
-            var sector = jkl.Sectors[sectorIdx];
-            var go = new GameObject("Sector " + sectorIdx);
-            go.transform.SetParent(transform, false);
+            minmax.Encapsulate(sector.BoundingBox);
+        }
 
-            var meshFilter = go.AddComponent<MeshFilter>();
-            var meshRenderer = go.AddComponent<MeshRenderer>();
-            meshRenderer.sharedMaterial = StandardMaterial;
+        SectorQuadTree = new QuadTree(minmax);
 
-            var mesh = new Mesh();
+        for (var sectorIdx = 0; sectorIdx < _jkl.Sectors.Length; sectorIdx++)
+        {
+            var sector = _jkl.Sectors[sectorIdx];
+            // var go = new GameObject("Sector " + sectorIdx);
+            // go.transform.SetParent(transform, false);
+
+            // var meshFilter = go.AddComponent<MeshFilter>();
+            // var meshRenderer = go.AddComponent<MeshRenderer>();
+            // go.AddComponent<GizmoBBox>();
+            // meshRenderer.enabled = false;
+            // var sectorObj = go.AddComponent<SectorObject>();
+            // sectorObj.Sector = sector;
+
+            // meshRenderer.sharedMaterial = StandardMaterial;
+
+            sector.Mesh = new Mesh();
 
             var vertices = new List<Vector3>();
             var triangles = new List<int>();
@@ -178,17 +301,31 @@ public class Sith : MonoBehaviour
             {
                 var surfaceIdx = sector.SurfaceStartIdx + i;
 
-                var surface = jkl.WorldSurfaces[surfaceIdx];
+                var surface = _jkl.WorldSurfaces[surfaceIdx];
                 if (surface.Adjoin != null)
+                {
+                    if (surface.Adjoin.SurfaceVertices.Count > 0)
+                        Debug.LogError("WTF");
+                    surface.Adjoin.SurfaceVertices = new List<Vector3>();
+                    for (var s = 0; s < surface.SurfaceVertexGroups.Length; s++)
+                    {
+                        SurfaceVertexGroup t = surface.SurfaceVertexGroups[s];
+                        var vertIndex = t.VertexIdx;
+                        var vert = new Vector3(_jkl.WorldVertices[vertIndex].x, _jkl.WorldVertices[vertIndex].z,
+                            _jkl.WorldVertices[vertIndex].y);
+                        surface.Adjoin.SurfaceVertices.Add(vert * 10);
+                    }
+                    sector.Adjoins.Add(surface.Adjoin);
                     continue;
+                }
 
                 var viStart = vertices.Count;
                 for (var s = 0; s < surface.SurfaceVertexGroups.Length; s++)
                 {
                     SurfaceVertexGroup t = surface.SurfaceVertexGroups[s];
                     var vertIndex = t.VertexIdx;
-                    var vert = new Vector3(jkl.WorldVertices[vertIndex].x, jkl.WorldVertices[vertIndex].z,
-                        jkl.WorldVertices[vertIndex].y);
+                    var vert = new Vector3(_jkl.WorldVertices[vertIndex].x, _jkl.WorldVertices[vertIndex].z,
+                        _jkl.WorldVertices[vertIndex].y);
                     vertices.Add(vert);
                     normals.Add(new Vector3(surface.SurfaceNormal.x, surface.SurfaceNormal.z, surface.SurfaceNormal.y));
 
@@ -225,21 +362,22 @@ public class Sith : MonoBehaviour
                 }
             }
 
-            mesh.SetVertices(vertices);
-            mesh.SetUVs(0, uvs);
-            mesh.SetUVs(1, atlasPosSize);
-            mesh.SetColors(intensities);
-            mesh.SetNormals(normals);
-            mesh.SetTriangles(triangles, 0);
+            sector.Mesh.SetVertices(vertices);
+            sector.Mesh.SetUVs(0, uvs);
+            sector.Mesh.SetUVs(1, atlasPosSize);
+            sector.Mesh.SetColors(intensities);
+            sector.Mesh.SetNormals(normals);
+            sector.Mesh.SetTriangles(triangles, 0);
+            sector.Mesh.bounds = sector.BoundingBox;
 
-            meshFilter.sharedMesh = mesh;
+            // var collider = go.AddComponent<MeshCollider>();
+            // collider.cookingOptions = MeshColliderCookingOptions.WeldColocatedVertices |
+            //                           MeshColliderCookingOptions.EnableMeshCleaning |
+            //                           MeshColliderCookingOptions.CookForFasterSimulation;
 
-            var collider = go.AddComponent<MeshCollider>();
-            collider.cookingOptions = MeshColliderCookingOptions.WeldColocatedVertices |
-                                      MeshColliderCookingOptions.EnableMeshCleaning |
-                                      MeshColliderCookingOptions.CookForFasterSimulation;
+            // collider.sharedMesh = mesh;
 
-            collider.sharedMesh = mesh;
+            SectorQuadTree.AddSector(sector);
         }
     }
 

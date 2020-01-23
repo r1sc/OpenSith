@@ -1,6 +1,6 @@
 namespace jksharp.jklviewer.JKL
 {
-    internal class Material
+    public class Material
     {
         public string Name { get; set; }
         public float XTile { get; set; }

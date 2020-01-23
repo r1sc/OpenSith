@@ -45,7 +45,7 @@ namespace jksharp.jklviewer.JKL
             if (_line == null)
                 return;
 
-            _args = new List<string>(_line.Trim().Split(new[] {' ', '\t'}, StringSplitOptions.RemoveEmptyEntries));
+            _args = new List<string>(_line.Trim().Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries));
         }
 
         public JKLParser(JKL jkl, Stream jklStream)
@@ -125,7 +125,7 @@ namespace jksharp.jklviewer.JKL
                     thing.Yaw = float.Parse(_args[7]);
                     thing.Roll = float.Parse(_args[8]);
                     thing.SectorIdx = int.Parse(_args[9]);
-                    
+
                     _jkl.Things.Add(thing);
                 }
             }
@@ -144,7 +144,7 @@ namespace jksharp.jklviewer.JKL
                     {
                         break;
                     }
-                    
+
                     var name = _args[0];
                     var basedOn = _args[1];
                     var numParams = _args.Count - 2;
@@ -165,7 +165,7 @@ namespace jksharp.jklviewer.JKL
             if (Match("World models"))
             {
                 _jkl.Models = new List<string>();
-                
+
                 while (true)
                 {
                     ReadLine();
@@ -207,11 +207,18 @@ namespace jksharp.jklviewer.JKL
                         _jkl.Sectors[currentSectorIdx] = currentSector;
                     }
                     currentSectorIdx = int.Parse(_args[0]);
-                    currentSector = new Sector();
+                    currentSector = new Sector(currentSectorIdx);
                 }
                 else if (Match("FLAGS"))
                 {
                     currentSector.Flags = (uint)ParseHex(_args[0]);
+                }
+                else if (Match("BOUNDBOX"))
+                {
+                    var bbox = new Bounds();
+                    bbox.min = new Vector3(float.Parse(_args[0]), float.Parse(_args[2]), float.Parse(_args[1]));
+                    bbox.max = new Vector3(float.Parse(_args[3]), float.Parse(_args[5]), float.Parse(_args[4]));
+                    currentSector.BoundingBox = bbox;
                 }
                 else if (Match("VERTICES"))
                 {
@@ -321,7 +328,7 @@ namespace jksharp.jklviewer.JKL
                             SurfaceVertexGroups = new SurfaceVertexGroup[int.Parse(args[9])],
                             Sector = null
                         };
-                        if(adjoin != null)
+                        if (adjoin != null)
                             adjoin.Surface = surface;
 
                         _jkl.WorldSurfaces[idx] = surface;
@@ -501,7 +508,7 @@ namespace jksharp.jklviewer.JKL
         }
     }
 
-    internal class WorldSurface
+    public class WorldSurface
     {
         public Material Material { get; set; }
         public uint SurfaceFlags { get; set; }
@@ -517,25 +524,37 @@ namespace jksharp.jklviewer.JKL
         public Sector Sector { get; set; }
     }
 
-    internal class Sector
+    public class Sector
     {
+
+        public Sector(int index)
+        {
+            this.Index = index;
+        }
+
+        public int Index { get; set; }
         public uint Flags { get; set; }
+        public Bounds BoundingBox { get; set; }
         public int SurfaceStartIdx { get; set; }
         public int SurfaceCount { get; set; }
         public int[] VertexIndices { get; set; }
+        public Mesh Mesh { get; set; }
+        public List<Adjoin> Adjoins { get; set; } = new List<Adjoin>();
     }
 
-    internal class SurfaceVertexGroup
+    public class SurfaceVertexGroup
     {
         public int VertexIdx { get; set; }
         public Vector2? TextureVertex { get; set; }
     }
 
-    internal class Adjoin
+    public class Adjoin
     {
         public uint Flags { get; set; }
         public int Mirror { get; set; }
         public float Distance { get; set; }
         public WorldSurface Surface { get; set; }
+        public Bounds Bounds { get; set; }
+        public List<Vector3> SurfaceVertices { get; internal set; } = new List<Vector3>();
     }
 }
