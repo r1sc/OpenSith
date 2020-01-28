@@ -15,10 +15,10 @@ public class PolygonTests : MonoBehaviour
     };
 
     List<Vector3> polygon2 = new List<Vector3>() {
-        new Vector3(-10, -20, 10),
-        new Vector3(10, -20, 10),
-        new Vector3(10, -30, 10),
-        new Vector3(-10, -30, 10),
+        new Vector3(-9.0f, -28.0f, 0.0f),
+        new Vector3(9.0f, -28.0f, 0.0f),
+        new Vector3(9.0f, -17.0f, 0.0f),
+        new Vector3(-9.0f, -17.0f, 0.0f)
     };
 
     void OnDrawGizmos()
@@ -29,7 +29,15 @@ public class PolygonTests : MonoBehaviour
         DrawGizmoPolygon(polygon2);
 
         var planes = GeometryUtility.CalculateFrustumPlanes(Camera.main);
-        var clippedPolygon = PolygonClipping.SutherlandHodgemanClipPolygon(polygon, planes);
+        //Gizmos.color = Color.red;
+        //foreach (var plane in planes)
+        //{
+        //    PolygonClipping.DrawPlane(plane);
+        //}
+
+        //Debug.Log(PolygonClipping.IsCW(polygon) + " and " + PolygonClipping.IsCW(polygon2));
+
+        var clippedPolygon = PolygonClipping.SutherlandHodgemanClipPolygon(Camera.main.transform.position, Vector3.forward, polygon, new List<Plane>(planes));
 
         if (clippedPolygon.Count > 0)
         {
@@ -37,12 +45,13 @@ public class PolygonTests : MonoBehaviour
             DrawGizmoPolygon(clippedPolygon);
 
             var newPlanes = PolygonClipping.CreatePlanesFromVertices(clippedPolygon);
-            var clippedPolygon2 = PolygonClipping.SutherlandHodgemanClipPolygon(polygon2, newPlanes);
+            var clippedPolygon2 = PolygonClipping.SutherlandHodgemanClipPolygon(Camera.main.transform.position, Vector3.forward, polygon2, newPlanes);
 
             Gizmos.color = Color.magenta;
             DrawGizmoPolygon(clippedPolygon2);
         }
     }
+
 
     void DrawGizmoPolygon(List<Vector3> polygon)
     {

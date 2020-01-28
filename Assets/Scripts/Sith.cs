@@ -15,6 +15,7 @@ public class Sith : MonoBehaviour
 
     public Texture2D Atlas;
     public Material StandardMaterial;
+    public Material AdjoinMaterial;
 
     public string JKLToLoad;
     public string GamePath;
@@ -50,51 +51,54 @@ public class Sith : MonoBehaviour
 
     public void Update()
     {
-        DrawnSectors.Clear();
+
         clippedAdjoins.Clear();
+        var cameraSectors = SectorQuadTree.GetSectorsContaining(_camera.transform.position / 10.0f);
 
-        var cameraSector = SectorQuadTree.GetSectorContaining(_camera.transform.position / 10.0f);
+        var matrix = Matrix4x4.Scale(Vector3.one * 10);
 
-        if (cameraSector != null)
+        var cameraClippingPlanes = GeometryUtility.CalculateFrustumPlanes(_camera);
+        foreach (var sector in cameraSectors)
         {
-            Debug.Log("Drawing sector " + cameraSector.BoundingBox);
-            var matrix = Matrix4x4.Scale(Vector3.one * 10);
-
-            var cameraClippingPlanes = GeometryUtility.CalculateFrustumPlanes(_camera);
-            DrawSector(cameraSector, matrix, cameraClippingPlanes);
+            DrawnSectors.Clear();
+            DrawSector(sector, matrix, new List<Plane>(cameraClippingPlanes));
         }
     }
-
-    /*
-    function DrawSector(sector, clippingPlanes):
-        if HasBeenDrawnThisFrame(sector):
-            return
-
-        foreach portal in sector:
-            clippedPortalPolygon = ClipPortal(portal.polygon, clippingPlanes)
-            if clippedPortalPolygon.length > 0
-                DrawSector(portal.othersector, clippedPortalPolygon)
-
-    */
-
+    
     void OnDrawGizmos()
     {
         if (SectorQuadTree == null)
             return;
 
         Gizmos.color = Color.magenta;
-        var cameraSector = SectorQuadTree.GetSectorContaining(_camera.transform.position / 10.0f);
-        Gizmos.DrawWireCube(cameraSector.BoundingBox.center * 10, cameraSector.BoundingBox.size * 10);
-
-        Gizmos.color = Color.cyan;
-        foreach (var adjoin in cameraSector.Adjoins)
+        var cameraSectors = SectorQuadTree.GetSectorsContaining(_camera.transform.position / 10.0f);
+        foreach (var cameraSector in cameraSectors)
         {
-            DrawGizmoPolygon(adjoin.SurfaceVertices);
+            Gizmos.DrawWireCube(cameraSector.BoundingBox.center * 10, cameraSector.BoundingBox.size * 10);
         }
+        
 
-        Gizmos.color = Color.green;
+        //Gizmos.color = Color.cyan;
+        //foreach (var adjoin in cameraSector.Adjoins)
+        //{
+        //    DrawGizmoPolygon(adjoin.SurfaceVertices);
+        //}
+
+        var colors = new[]
+        {
+            Color.green,
+            Color.red,
+            Color.blue,
+            Color.white,
+            Color.black,
+            Color.yellow,
+            Color.cyan,
+            Color.magenta,
+        };
+        var curColorI = 0;
         foreach (var clippedAdjoin in clippedAdjoins)
         {
+            Gizmos.color = colors[(curColorI++)%colors.Length];
             DrawGizmoPolygon(clippedAdjoin.Polygon);
             Handles.Label(clippedAdjoin.Polygon[0], "Sector " + clippedAdjoin.SectorIndex);
         }
@@ -111,21 +115,22 @@ public class Sith : MonoBehaviour
         }
     }
 
-    private void DrawSector(Sector sector, Matrix4x4 matrix, IEnumerable<Plane> clippingPlanes)
+    private void DrawSector(Sector sector, Matrix4x4 matrix, List<Plane> clippingPlanes)
     {
-        if (DrawnSectors.Contains(sector.Index))
-            return;
-
-        DrawnSectors.Add(sector.Index);
-        if (sector.Index == 376)
-            Graphics.DrawMesh(sector.Mesh, matrix, StandardMaterial, 0);
+        Graphics.DrawMesh(sector.Mesh, matrix, StandardMaterial, 0);
+        
 
         foreach (var adjoin in sector.Adjoins)
         {
             var otherSurface = _jkl.WorldAdjoins[adjoin.Mirror].Surface;
 
 
-            var clippedAdjoin = PolygonClipping.SutherlandHodgemanClipPolygon(adjoin.SurfaceVertices, clippingPlanes);
+            //if (DrawnSectors.Contains(adjoin.Index))
+            //    continue;
+
+            //DrawnSectors.Add(sector.Index);
+
+            var clippedAdjoin = PolygonClipping.SutherlandHodgemanClipPolygon(_camera.transform.position, new Vector3(adjoin.Surface.SurfaceNormal.x, adjoin.Surface.SurfaceNormal.z, adjoin.Surface.SurfaceNormal.y), adjoin.SurfaceVertices, clippingPlanes);
             if (clippedAdjoin.Count > 0)
             {
                 var newClippingPlanes = PolygonClipping.CreatePlanesFromVertices(clippedAdjoin);
@@ -133,9 +138,10 @@ public class Sith : MonoBehaviour
                 // if (otherSector.Index == sector.Index)
                 //     otherSector = adjoin.Surface.Sector;
 
+
                 clippedAdjoins.Add(new ClippedAdjoin { Polygon = clippedAdjoin, SectorIndex = otherSurface.Sector.Index });
 
-
+                //Graphics.DrawMesh(otherSurface.Sector.Mesh, matrix, StandardMaterial, 0);
                 DrawSector(otherSurface.Sector, matrix, newClippingPlanes);
 
             }
@@ -304,8 +310,8 @@ public class Sith : MonoBehaviour
                 var surface = _jkl.WorldSurfaces[surfaceIdx];
                 if (surface.Adjoin != null)
                 {
-                    if (surface.Adjoin.SurfaceVertices.Count > 0)
-                        Debug.LogError("WTF");
+                    var adjoinVertices = new List<Vector3>();
+                    var adjoinNormals = new List<Vector3>();
                     surface.Adjoin.SurfaceVertices = new List<Vector3>();
                     for (var s = 0; s < surface.SurfaceVertexGroups.Length; s++)
                     {
@@ -314,7 +320,31 @@ public class Sith : MonoBehaviour
                         var vert = new Vector3(_jkl.WorldVertices[vertIndex].x, _jkl.WorldVertices[vertIndex].z,
                             _jkl.WorldVertices[vertIndex].y);
                         surface.Adjoin.SurfaceVertices.Add(vert * 10);
+                        adjoinVertices.Add(vert);
+                        adjoinNormals.Add(new Vector3(surface.SurfaceNormal.x, surface.SurfaceNormal.z, surface.SurfaceNormal.y));
                     }
+
+                    var adjoinTriangles = new List<int>();
+                    var numAdjoinTriangles = surface.SurfaceVertexGroups.Length - 3 + 1;
+                    for (var t = 1; t <= numAdjoinTriangles; t++)
+                    {
+                        adjoinTriangles.Add(t);
+                        adjoinTriangles.Add(0);
+                        adjoinTriangles.Add(t + 1);
+                    }
+                    var go = new GameObject("Adjoin " + sectorIdx + " -> " + surface.Adjoin.Mirror);
+                    go.transform.SetParent(transform, false);
+
+                    var meshFilter = go.AddComponent<MeshFilter>();
+                    var mesh = new Mesh();
+                    mesh.vertices = adjoinVertices.ToArray();
+                    mesh.triangles = adjoinTriangles.ToArray();
+                    mesh.normals = adjoinNormals.ToArray();
+                    meshFilter.sharedMesh = mesh;
+
+                    var meshRenderer = go.AddComponent<MeshRenderer>();
+                    meshRenderer.sharedMaterial = AdjoinMaterial;
+                    
                     sector.Adjoins.Add(surface.Adjoin);
                     continue;
                 }

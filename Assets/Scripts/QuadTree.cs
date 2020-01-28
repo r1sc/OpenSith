@@ -58,25 +58,26 @@ class QuadTreeNode
         return true;
     }
 
-    public Sector GetSectorContaining(Vector3 pos)
+    public List<Sector> GetSectorsContaining(Vector3 pos)
     {
+
+        var results = new List<Sector>();
         foreach (var child in Children)
         {
             if (child.BoundingBox.Contains(pos))
             {
-                var childSector = child.GetSectorContaining(pos);
-                if (childSector != null)
-                    return childSector;
+                var childSectors = child.GetSectorsContaining(pos);
+                results.AddRange(childSectors);
             }
         }
 
         foreach (var sector in Sectors)
         {
             if (sector.BoundingBox.Contains(pos))
-                return sector; // as good as any
+                results.Add(sector); // as good as any
         }
 
-        return null; // no sector found
+        return results; // no sector found
     }
 
     public void Draw()
@@ -105,9 +106,9 @@ public class QuadTree
     }
 
 
-    public Sector GetSectorContaining(Vector3 pos)
+    public List<Sector> GetSectorsContaining(Vector3 pos)
     {
-        return _root.GetSectorContaining(pos);
+        return _root.GetSectorsContaining(pos);
     }
 
     public void Draw()

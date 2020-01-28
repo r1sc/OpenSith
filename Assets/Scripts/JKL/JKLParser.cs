@@ -297,6 +297,7 @@ namespace jksharp.jklviewer.JKL
                         var idx = int.Parse(args[0].Replace(":", ""));
                         _jkl.WorldAdjoins[idx] = new Adjoin
                         {
+                            Index = i,
                             Flags = (uint)ParseHex(args[1]),
                             Mirror = int.Parse(args[2]),
                             Distance = float.Parse(args[3])
@@ -551,6 +552,7 @@ namespace jksharp.jklviewer.JKL
     public class Adjoin
     {
         public uint Flags { get; set; }
+        public int Index { get; set; }
         public int Mirror { get; set; }
         public float Distance { get; set; }
         public WorldSurface Surface { get; set; }
